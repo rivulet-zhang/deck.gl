@@ -2,6 +2,7 @@
 import {scaleLog} from 'd3-scale';
 import Tag from './tag';
 import rbush from 'rbush';
+import Clustering from 'density-clustering-kdtree-doping';
 
 export default class TagMapper {
 
@@ -12,35 +13,35 @@ export default class TagMapper {
     this.minFontSize = minFontSize;
     this.maxFontSize = maxFontSize;
     this.weightThreshold = weightThreshold;
+
+    this.dbscan = new Clustering.DBSCAN_KDTREE();
   }
 
-  // a basic db-scan-like aggregation
-  aggregate(term, loc, weight) {
-    if (!this.tagmap.hasOwnProperty(term)) {
-      // add a new entry
-      const tag = new Tag(term);
-      tag.add(loc, weight);
-      this.tagmap[term] = [tag];
-    } else {
-      // find nearest entry -- can optimize based on kNN
-      let near = Number.MAX_VALUE;
-      let nearTag = null;
-      this.tagmap[term].forEach(x => {
-        const dist = x.dist(loc);
-        if (dist < near) {
-          near = dist;
-          nearTag = x;
-        }
-      });
-      // basic split based on distance threshold
-      if (near > this.maxDist) {
-        // add a new entry
-        const tag = new Tag(term);
-        tag.add(loc, weight);
-        this.tagmap[term].push(tag);
-      } else {
-        nearTag.add(loc, weight);
+  aggregate(data, {getLabel, getPosition, getWeight}) {
+    // clear tagmap
+    this.tagmap = {};
+    // group tags based on the content
+    data.forEach(val => {
+      const label = getLabel(val);
+      if (!this.tagmap.hasOwnProperty(label)) {
+        this.tagmap[label] = [];
       }
+      this.tagmap[label].push({position: getPosition(val), weight: getWeight(val)});
+    });
+    // use dbscan to cluster tags
+    for (const key in this.tagmap) {
+      const positions = this.tagmap[key].map(val => val.position);
+      const weights = this.tagmap[key].map(val => val.weight);
+      const clusters = this.dbscan.run(positions, this.maxDist, 1);
+      // val is a list of index to the points
+      const tags = clusters.map(val => {
+        const tag = new Tag(key);
+        val.forEach(_val => {
+          tag.add(positions[_val], weights[_val]);
+        });
+        return tag;
+      });
+      this.tagmap[key] = tags;
     }
   }
 
@@ -50,7 +51,7 @@ export default class TagMapper {
     }
     return Object.values(this.tagmap).reduce((prev, curr) => prev.concat(curr))
       .filter(x => x.weight >= this.weightThreshold)
-      .sort((a, b) => b.weight - a.weight);
+      .sort((a, b) => b.weight - a.weight || a.term.length - b.term.length);
   }
 
   _getScale(minWeight, maxWeight) {
@@ -75,10 +76,10 @@ export default class TagMapper {
   _placeTag(placedTag, tree, tag) {
     let angle = -90.0;
     const deltaAngle = 25;
-    let radius = 5.0;
+    let radius = 3.0;
     const deltaRadius = 1.0;
     let iter = 0;
-    const iterThreshold = 10;
+    const iterThreshold = 12;
 
     const center = tag.center.slice();
     while (iter <= iterThreshold) {

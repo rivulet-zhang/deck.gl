@@ -12,13 +12,10 @@ export function tagmapLayout(data, transform, canvas, {getLabel, getPosition, ge
   const {minFontSize, maxFontSize, weightThreshold, colorScheme} = visParam;
   const sizeMeasurer = (fontSize, str) => measureTextWidth(canvas, fontSize, str);
   const tagmapper = new TagMapper({sizeMeasurer, maxDist, minFontSize, maxFontSize, weightThreshold});
-  // add data points
-  data.forEach(x => {
-    tagmapper.aggregate(getLabel(x), getPosition(x), getWeight(x));
-  });
+  // add data
+  tagmapper.aggregate(data, {getLabel, getPosition, getWeight});
   // calculate layout
   let tags = tagmapper.layout();
-
   // set color scale function
   const getColorRGBA = x => {
     const hex = getColorScale(minFontSize, maxFontSize, colorScheme)(x);

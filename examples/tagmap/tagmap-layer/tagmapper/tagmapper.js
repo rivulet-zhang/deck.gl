@@ -2,7 +2,7 @@
 import {scaleLog} from 'd3-scale';
 import Tag from './tag';
 import rbush from 'rbush';
-import Clustering from 'density-clustering-kdtree-doping';
+import Clustering from 'density-clustering';
 
 export default class TagMapper {
 
@@ -14,7 +14,7 @@ export default class TagMapper {
     this.maxFontSize = maxFontSize;
     this.weightThreshold = weightThreshold;
 
-    this.dbscan = new Clustering.DBSCAN_KDTREE();
+    this.dbscan = new Clustering.DBSCAN();
   }
 
   aggregate(data, {getLabel, getPosition, getWeight}) {

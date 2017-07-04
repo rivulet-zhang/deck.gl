@@ -5,6 +5,7 @@ import MapGL from 'react-map-gl';
 import DeckGLOverlay from './deckgl-overlay.js';
 import MAP_STYLE from './style/map-style-dark-v9.json';
 import {fromJS} from 'immutable';
+import Stats from 'stats.js';
 // handle ajax call
 import axios from 'axios';
 
@@ -32,6 +33,22 @@ class Root extends Component {
     this._resize();
     // set data in component state
     this._loadData();
+
+    this._stats = new Stats();
+    this._stats.showPanel(0);
+    this.refs.fps.appendChild(this._stats.dom);
+
+    const calcFPS = () => {
+      this._stats.begin();
+      this._stats.end();
+      this._animateRef = window.requestAnimationFrame(calcFPS);
+    };
+
+    this._animateRef = window.requestAnimationFrame(calcFPS);
+  }
+
+  componentWillUnmount() {
+    window.cancelAnimationFrame(this._animateRef);
   }
 
   _resize() {
@@ -54,7 +71,7 @@ class Root extends Component {
 
     axios.get(FILE_PATH)
       .then(response => {
-        const data = response.data.filter(x => !excludeList.has(x.label)).slice(0, 3000);
+        const data = response.data.filter(x => !excludeList.has(x.label));
         this.setState({data, weightThreshold});
       }).catch(error => {
         throw new Error(error.toString());
@@ -73,17 +90,20 @@ class Root extends Component {
     const {viewport, mapStyle, data, weightThreshold} = this.state;
 
     return (
-      <MapGL
-        {...viewport}
-        mapStyle={mapStyle}
-        onViewportChange={this._onViewportChange.bind(this)}
-        mapboxApiAccessToken={MAPBOX_TOKEN}>
-        <DeckGLOverlay
-          viewport={viewport}
-          data={data}
-          weightThreshold={weightThreshold}
-        />
-      </MapGL>
+      <div>
+        <MapGL
+          {...viewport}
+          mapStyle={mapStyle}
+          onViewportChange={this._onViewportChange.bind(this)}
+          mapboxApiAccessToken={MAPBOX_TOKEN}>
+          <DeckGLOverlay
+            viewport={viewport}
+            data={data}
+            weightThreshold={weightThreshold}
+          />
+        </MapGL>
+        <div ref="fps" className="fps" />
+      </div>
     );
   }
 }

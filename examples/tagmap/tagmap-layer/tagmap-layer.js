@@ -1,11 +1,10 @@
-/* global document, window */
+/* global window */
 /* eslint-disable max-len */
 import {CompositeLayer, IconLayer, WebMercatorViewport} from 'deck.gl';
 import {makeTextureAtlasFromLabels} from './label-utils';
-import {tagmapLayout} from './tagmap-utils';
+import TagMapWrapper from './tagmap-utils';
 import colorbrewer from 'colorbrewer';
 
-/* Constants */
 const defaultProps = {
   getLabel: x => x.label,
   getWeight: x => x.weight,
@@ -20,9 +19,7 @@ const defaultProps = {
 export default class TagmapLayer extends CompositeLayer {
 
   initializeState() {
-    // create canvas for measuring the text size
-    const canvas = document.createElement('canvas');
-    this.state = {canvas};
+    this.state = {};
   }
 
   shouldUpdateState({changeFlags}) {
@@ -34,12 +31,13 @@ export default class TagmapLayer extends CompositeLayer {
 
     if (changeFlags.dataChanged) {
       this.updateLabelAtlas();
-      this.updateLayout();
+      this.updateData();
+      this.updateVis();
     } else if (changeFlags.viewportChanged ||
         props.minFontSize !== oldProps.minFontSize ||
         props.maxFontSize !== oldProps.maxFontSize ||
         props.weightThreshold !== oldProps.weightThreshold) {
-      this.updateLayout();
+      this.updateVis();
     }
   }
 
@@ -63,24 +61,36 @@ export default class TagmapLayer extends CompositeLayer {
     mapping.forEach((x, i) => {
       mappingDict[labels[i]] = x;
     });
-    this.setState({data, texture, mapping: mappingDict});
+    this.setState({texture, mapping: mappingDict});
   }
 
-  updateLayout() {
-    const {data} = this.state;
-    if (!data || data.length === 0) {
+  updateData() {
+    const {data, getLabel, getPosition, getWeight} = this.props;
+    const tagMap = new TagMapWrapper();
+    tagMap.setData(data, {getLabel, getPosition, getWeight});
+    this.setState({tagMap});
+  }
+
+  updateVis() {
+    if (!this.state.tagMap) {
       return;
     }
 
     const {viewport} = this.context;
-    // data accessor
-    const {getPosition, getLabel, getWeight} = this.props;
-    // vis param
     const {minFontSize, maxFontSize, weightThreshold, colorScheme} = this.props;
-    const visParam = {minFontSize, maxFontSize, weightThreshold, colorScheme};
+    const transform = new WebMercatorViewport(Object.assign({}, viewport));
+
+    this.state.tagMap.setVisParam({minFontSize, maxFontSize, weightThreshold, colorScheme});
+    const tags = this.state.tagMap.getTags({transform, viewport});
+    this.setState({tags});
+    // data accessor
+    // const {getPosition, getLabel, getWeight} = this.props;
+    // vis param
+    // const {minFontSize, maxFontSize, weightThreshold, colorScheme} = this.props;
+    // const visParam = {minFontSize, maxFontSize, weightThreshold, colorScheme};
 
     // filter to only visualize labels in the viewport
-    const transform = new WebMercatorViewport(Object.assign({}, viewport));
+    // const transform = new WebMercatorViewport(Object.assign({}, viewport));
     // const labelsInViewport = this.state.data.map(x => {
     //   const pCoords = transform.project(getPosition(x));
     //   return Object.assign({}, {pCoords}, x);
@@ -89,8 +99,7 @@ export default class TagmapLayer extends CompositeLayer {
     // });
 
     // generate tagmap
-    const {tags} = tagmapLayout(this.state.data, {transform, viewport}, this.state.canvas, {getLabel, getPosition, getWeight}, visParam);
-    this.setState({tags});
+    // const tags = tagmapLayout(this.state.data, {transform, viewport}, this.state.canvas, {getLabel, getPosition, getWeight}, visParam);
   }
 
   renderLayers() {

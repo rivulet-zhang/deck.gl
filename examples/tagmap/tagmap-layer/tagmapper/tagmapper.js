@@ -2,19 +2,13 @@
 import {scaleLog} from 'd3-scale';
 import Tag from './tag';
 import rbush from 'rbush';
-import Clustering from 'density-clustering';
 import ClusterTree from 'hdbscanjs';
 
 export default class TagMapper {
-  constructor({sizeMeasurer, minFontSize, maxFontSize, weightThreshold}) {
+  constructor(sizeMeasurer) {
     this.tagTree = {};
-    this.tagmap = {};
+    this.tagMap = [];
     this.sizeMeasurer = sizeMeasurer;
-    this.minFontSize = minFontSize;
-    this.maxFontSize = maxFontSize;
-    this.weightThreshold = weightThreshold;
-
-    this.dbscan = new Clustering.DBSCAN();
   }
 
   buildHierarchy(data, {getLabel, getPosition, getWeight}) {
@@ -34,9 +28,9 @@ export default class TagMapper {
     }
   }
 
-  extractCluster(transform, viewport) {
-    // clear tagmap
-    this.tagmap = {};
+  extractCluster({transform, viewport}, weightThreshold) {
+    // clear tagMap
+    this.tagMap = [];
     for (const key in this.tagTree) {
       const tree = this.tagTree[key];
       const flagCluster = tree.filter(val => {
@@ -47,78 +41,40 @@ export default class TagMapper {
           [val.bbox.maxX, val.bbox.minY],
           [val.bbox.maxX, val.bbox.maxY]
         ];
-        const pointInViewport = p => p[0] >= 0 && p[0] <= viewport.width && p[1] >= 0 && p[1] <= viewport.height;
         const bboxOverlapViewport = corners.some(p => {
           const pixel = transform.project(p);
-          return pointInViewport(pixel);
+          return pixel[0] >= 0 && pixel[0] <= viewport.width && pixel[1] >= 0 && pixel[1] <= viewport.height;
         });
-        // a cluster of a single point
-        if (val.isLeaf) {
+        // a cluster of a single point or cluster outside the viewport
+        if (val.isLeaf || !bboxOverlapViewport) {
           return bboxOverlapViewport;
         }
         // test the cluster does not split under the current zoom level
         const cp0 = transform.project(val.edge[0]);
         const cp1 = transform.project(val.edge[1]);
-        const distLTthres = Math.sqrt(Math.pow((cp0[0] - cp1[0]), 2) + Math.pow((cp0[1] - cp1[1]), 2)) < TagMapper.maxDist;
-        return bboxOverlapViewport && distLTthres;
+        return Math.sqrt(Math.pow((cp0[0] - cp1[0]), 2) + Math.pow((cp0[1] - cp1[1]), 2)) < TagMapper.maxDist;
       });
 
-      // generate tags which passed the test
+      // generate tags which passed the test and weightThreshold
       const tags = flagCluster.map(val => {
         const tag = new Tag(key);
         val.data.forEach((p, i) => tag.add(p, val.opt[i]));
         tag.setCenter(transform.project(tag.center));
         return tag;
-      });
-      this.tagmap[key] = tags;
+      }).filter(val => val.weight >= weightThreshold);
+
+      this.tagMap = this.tagMap.concat(tags);
     }
   }
 
-  // aggregate(data, {getLabel, getPosition, getWeight}) {
-  //   // clear tagmap
-  //   this.tagmap = {};
-  //   // group tags based on the content
-  //   data.forEach(val => {
-  //     const label = getLabel(val);
-  //     if (!this.tagmap.hasOwnProperty(label)) {
-  //       this.tagmap[label] = [];
-  //     }
-  //     this.tagmap[label].push({position: getPosition(val), weight: getWeight(val)});
-  //   });
-  //   // use dbscan to cluster tags
-  //   for (const key in this.tagmap) {
-  //     const positions = this.tagmap[key].map(val => val.position);
-  //     const weights = this.tagmap[key].map(val => val.weight);
-  //     const clusters = this.dbscan.run(positions, TagMapper.maxDist, 1);
-  //     // val is a list of index to the points
-  //     const tags = clusters.map(val => {
-  //       const tag = new Tag(key);
-  //       val.forEach(_val => {
-  //         tag.add(positions[_val], weights[_val]);
-  //       });
-  //       return tag;
-  //     });
-  //     this.tagmap[key] = tags;
-  //   }
-  // }
-
-  _getSortedTags() {
-    if (Object.keys(this.tagmap).length === 0) {
-      return [];
-    }
-    return Object.values(this.tagmap).reduce((prev, curr) => prev.concat(curr))
-      .filter(x => x.weight >= this.weightThreshold)
-      .sort((a, b) => b.weight - a.weight || a.term.length - b.term.length);
-  }
-
-  _getScale(minWeight, maxWeight) {
+  _getScale(minWeight, maxWeight, minFontSize, maxFontSize) {
     if (minWeight === maxWeight) {
-      return x => (this.minFontSize + this.maxFontSize) * 0.5;
+      return x => (minFontSize + maxFontSize) * 0.5;
     }
     // set log scale for label size
     return scaleLog().base(Math.E)
                       .domain([minWeight, maxWeight])
-                      .range([this.minFontSize, this.maxFontSize]);
+                      .range([minFontSize, maxFontSize]);
   }
 
   // center is two element array
@@ -166,20 +122,19 @@ export default class TagMapper {
     }
   }
 
-  layout() {
-    // get tags in descending order
-    const tags = this._getSortedTags();
-    if (!tags) {
+  layout({minFontSize, maxFontSize}) {
+    if (!this.tagMap) {
       return [];
     }
+    // get tags in descending order
+    const orderedTags = this.tagMap.sort((a, b) => b.weight - a.weight || a.term.length - b.term.length);
     // get scale function to calculate size of label bounding box
-    const weights = tags.map(x => x.weight);
-    const minWeight = Math.min.apply(null, weights);
-    const maxWeight = Math.max.apply(null, weights);
+    const minWeight = orderedTags[orderedTags.length - 1].weight;
+    const maxWeight = orderedTags[0].weight;
 
     // calculate bounding box
-    tags.forEach(x => {
-      const fontSize = this._getScale(minWeight, maxWeight)(x.weight);
+    orderedTags.forEach(x => {
+      const fontSize = this._getScale(minWeight, maxWeight, minFontSize, maxFontSize)(x.weight);
       const {width, height} = this.sizeMeasurer(fontSize, x.term);
       x.setSize(width, height);
     });
@@ -187,9 +142,30 @@ export default class TagMapper {
     // run actual layout algorithm
     const placedTag = [];
     const tree = rbush();
-    tags.forEach(x => this._placeTag(placedTag, tree, x));
+    orderedTags.forEach(x => this._placeTag(placedTag, tree, x));
 
     return placedTag;
+  }
+
+  layoutPlain({minFontSize, maxFontSize}) {
+    if (!this.tagMap || this.tagMap.length === 0) {
+      return [];
+    }
+    // get tags in descending order
+    const orderedTags = this.tagMap.sort((a, b) => b.weight - a.weight || a.term.length - b.term.length);
+    // get scale function to calculate size of label bounding box
+    const minWeight = orderedTags[orderedTags.length - 1].weight;
+    const maxWeight = orderedTags[0].weight;
+
+    // calculate bounding box
+    orderedTags.forEach(x => {
+      const fontSize = this._getScale(minWeight, maxWeight, minFontSize, maxFontSize)(x.weight);
+      const {width, height} = this.sizeMeasurer(fontSize, x.term);
+      x.setSize(width, height);
+    });
+
+    return orderedTags;
+
   }
 
   // screen-space aggregation threshold: invisible to the user

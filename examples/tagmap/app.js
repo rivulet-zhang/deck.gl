@@ -12,7 +12,7 @@ import axios from 'axios';
 // Set your mapbox token here
 const MAPBOX_TOKEN = process.env.MapboxAccessToken; // eslint-disable-line
 // sample data
-const FILE_PATH = 'https://rivulet-zhang.github.io/dataRepo/tagmap/hashtags10k.json';
+const FILE_PATH = 'https://rivulet-zhang.github.io/dataRepo/tagmap/hashtags100k.json';
 
 class Root extends Component {
 
@@ -67,11 +67,12 @@ class Root extends Component {
   _loadData() {
     // remove high-frequency terms
     const excludeList = new Set(['#hiring', '#job', '#jobs', '#careerarc', '#career']);
-    const weightThreshold = 2;
+    const weightThreshold = 1;
 
     axios.get(FILE_PATH)
       .then(response => {
-        const data = response.data.filter(x => !excludeList.has(x.label));
+        const data = response.data.filter(x => !excludeList.has(x.label)).slice(0, 5000);
+        // const data = response.data.filter(x => x.label == '#losangeles');
         this.setState({data, weightThreshold});
       }).catch(error => {
         throw new Error(error.toString());

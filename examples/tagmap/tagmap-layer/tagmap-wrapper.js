@@ -1,11 +1,11 @@
-/* generate tagmap layout: an occlusion-free tagcloud-like visualization on map */
+/* create a tagmap instance, set colorscheme, sizeMeasurer */
 /* eslint-disable max-len */
 /* global document */
 import TagMap from 'tagmap.js';
 import {color} from 'd3-color';
 import {scaleQuantile} from 'd3-scale';
 
-export default class TagMapConnector {
+export default class TagMapWrapper {
   constructor() {
     this.TagMap = null;
     this.visParam = null;

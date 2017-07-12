@@ -28,9 +28,13 @@ class Root extends Component {
     };
   }
 
-  componentDidMount() {
+  // use this instead of componentDidMount to avoid pickingFBO incorrect size issue
+  componentWillMount() {
     window.addEventListener('resize', this._resize.bind(this));
     this._resize();
+  }
+
+  componentDidMount() {
     // set data in component state
     this._loadData();
 

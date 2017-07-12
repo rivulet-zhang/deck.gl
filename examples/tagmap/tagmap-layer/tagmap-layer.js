@@ -2,7 +2,7 @@
 /* eslint-disable max-len */
 import {CompositeLayer, IconLayer, WebMercatorViewport} from 'deck.gl';
 import {makeTextureAtlasFromLabels} from './label-utils';
-import TagMapConnector from './tagmap-connector';
+import TagMapWrapper from './tagmap-wrapper';
 import colorbrewer from 'colorbrewer';
 
 const defaultProps = {
@@ -18,7 +18,10 @@ const defaultProps = {
 export default class TagmapLayer extends CompositeLayer {
 
   initializeState() {
-    this.state = {};
+    this.state = {
+      tagMap: null,
+      tags: []
+    };
   }
 
   shouldUpdateState({changeFlags}) {
@@ -30,13 +33,13 @@ export default class TagmapLayer extends CompositeLayer {
 
     if (changeFlags.dataChanged) {
       this.updateLabelAtlas();
-      this.updateData();
-      this.updateVis();
+      this.updateTagMapData();
+      this.updateTagMapVis();
     } else if (changeFlags.viewportChanged ||
         props.minFontSize !== oldProps.minFontSize ||
         props.maxFontSize !== oldProps.maxFontSize ||
         props.weightThreshold !== oldProps.weightThreshold) {
-      this.updateVis();
+      this.updateTagMapVis();
     }
   }
 
@@ -63,15 +66,16 @@ export default class TagmapLayer extends CompositeLayer {
     this.setState({texture, mapping: mappingDict});
   }
 
-  updateData() {
+  updateTagMapData() {
     const {data, getLabel, getPosition, getWeight} = this.props;
-    const tagMap = new TagMapConnector();
+    const tagMap = new TagMapWrapper();
     tagMap.setData(data, {getLabel, getPosition, getWeight});
     this.setState({tagMap});
   }
 
-  updateVis() {
-    if (!this.state.tagMap) {
+  updateTagMapVis() {
+    const {tagMap} = this.state;
+    if (!tagMap) {
       return;
     }
 
@@ -79,8 +83,8 @@ export default class TagmapLayer extends CompositeLayer {
     const {minFontSize, maxFontSize, weightThreshold, colorScheme} = this.props;
     const transform = new WebMercatorViewport(Object.assign({}, viewport));
 
-    this.state.tagMap.setVisParam({minFontSize, maxFontSize, weightThreshold, colorScheme});
-    const tags = this.state.tagMap.getTags({transform, viewport});
+    tagMap.setVisParam({minFontSize, maxFontSize, weightThreshold, colorScheme});
+    const tags = tagMap.getTags({transform, viewport});
     this.setState({tags});
   }
 

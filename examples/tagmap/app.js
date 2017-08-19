@@ -73,7 +73,7 @@ class Root extends Component {
 
   _loadData() {
     // remove high-frequency terms
-    const excludeList = new Set(['#hiring', '#job', '#jobs', '#careerarc', '#career']);
+    const excludeList = new Set(['#hiring', '#job', '#jobs', '#careerarc', '#career', '#photo']);
     const weightThreshold = 1;
 
     requestJson(FILE_PATH, (error, response) => {

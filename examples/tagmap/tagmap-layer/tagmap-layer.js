@@ -1,7 +1,6 @@
-/* global window */
 /* eslint-disable max-len */
-import {CompositeLayer, IconLayer, WebMercatorViewport} from 'deck.gl';
-import {makeTextureAtlasFromLabels} from './label-utils';
+import {CompositeLayer, WebMercatorViewport} from 'deck.gl';
+import TextLayer from './text-layer';
 import TagMapWrapper from './tagmap-wrapper';
 import colorbrewer from 'colorbrewer';
 
@@ -32,7 +31,6 @@ export default class TagmapLayer extends CompositeLayer {
     super.updateState({props, oldProps, changeFlags});
 
     if (changeFlags.dataChanged) {
-      this.updateLabelAtlas();
       this.updateTagMapData();
       this.updateTagMapVis();
     } else if (changeFlags.viewportChanged ||
@@ -41,29 +39,6 @@ export default class TagmapLayer extends CompositeLayer {
         props.weightThreshold !== oldProps.weightThreshold) {
       this.updateTagMapVis();
     }
-  }
-
-  updateLabelAtlas() {
-    const {data, getLabel} = this.props;
-    if (!data || data.length === 0) {
-      return;
-    }
-
-    const {gl} = this.context;
-    // font size for texture generation
-    const fontSize = 32;
-    // avoid generating duplicate labels
-    const labels = Array.from(new Set(data.map(getLabel)));
-    // use the texture generator from label layer
-    // need to be optimized
-    const {texture, mapping} = makeTextureAtlasFromLabels(gl, {data: labels, fontSize});
-
-    // mappingDict -- key: label, val: mapping box in the texture
-    const mappingDict = {};
-    mapping.forEach((x, i) => {
-      mappingDict[labels[i]] = x;
-    });
-    this.setState({texture, mapping: mappingDict});
   }
 
   updateTagMapData() {
@@ -92,18 +67,14 @@ export default class TagmapLayer extends CompositeLayer {
     const {tags} = this.state;
 
     return [
-      new IconLayer(Object.assign({}, this.props, {
-        id: 'tag-map',
-        iconAtlas: this.state.texture,
-        iconMapping: this.state.mapping,
+      new TextLayer({
+        id: 'tagmap-layer',
         data: tags,
-        // weird scaling related to texture mapping and viewport change (pitch)
-        sizeScale: window.devicePixelRatio * 1.25,
-        getIcon: d => d.label,
+        getText: d => d.label,
         getPosition: d => d.position,
         getColor: d => d.color,
         getSize: d => d.size
-      }))
+      })
     ];
   }
 }

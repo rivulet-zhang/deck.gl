@@ -66,7 +66,7 @@ export default class TagMapWrapper {
   getSizeMeasurer() {
     return (label, fontSize) => {
       const ctx = this.canvas.getContext('2d');
-      ctx.font = `${fontSize}px Verdana,Arial,sans-serif`;
+      ctx.font = `${fontSize}px 'Lucida Console', Monaco, monospace`;
       ctx.fillStyle = '#000';
       ctx.textBaseline = 'hanging';
       ctx.textAlign = 'left';

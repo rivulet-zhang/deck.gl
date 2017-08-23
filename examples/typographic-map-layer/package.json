@@ -9,10 +9,12 @@
     "deck.gl": ">=4.1.0-beta.1",
     "loglevel": "^1.4.1",
     "luma.gl": "^4.0.1",
+    "paths-js": "^0.4.5",
     "react": "^15.4.1",
     "react-dom": "^15.4.1",
     "react-map-gl": ">=3.0.0-beta.1",
-    "stats.js": "^0.17.0"
+    "stats.js": "^0.17.0",
+    "svg.js": "^2.6.3"
   },
   "devDependencies": {
     "buble-loader": "^0.4.0",

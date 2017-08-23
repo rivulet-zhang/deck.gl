@@ -13,11 +13,7 @@ const MAPBOX_TOKEN = process.env.MapboxAccessToken; // eslint-disable-line
 // mapbox style file path
 const MAPBOX_STYLE_FILE = 'https://rivulet-zhang.github.io/dataRepo/mapbox/style/map-style-dark-v9-no-labels.json';
 // sample data
-const FILE_PATH = 'https://rivulet-zhang.github.io/dataRepo/text-layer/hashtagsOneDayWithTime.json';
-const SECONDS_PER_DAY = 24 * 60 * 60;
-// visualize data within in the time window of [current - TIME_WINDOW, current + TIME_WINDOW]
-const TIME_WINDOW = 2;
-const TEXT_COLOR = [12, 123, 234];
+const FILE_PATH = 'https://raw.githubusercontent.com/uber-common/deck.gl-data/master/website/bart.geo.json';
 
 class Root extends Component {
 
@@ -31,6 +27,7 @@ class Root extends Component {
       }
     };
     this._loadMapStyle();
+    this._loadData();
   }
 
   componentWillMount() {
@@ -51,14 +48,9 @@ class Root extends Component {
       this._animateRef = window.requestAnimationFrame(calcFPS);
     };
     window.requestAnimationFrame(calcFPS);
-
-    window.requestAnimationFrame(this._animateData.bind(this));
   }
 
   componentWillUnmount() {
-    if (this._animationFrame) {
-      window.cancelAnimationFrame(this._animationFrame);
-    }
     if (this._animateRef) {
       window.cancelAnimationFrame(this._animateRef);
     }
@@ -81,49 +73,31 @@ class Root extends Component {
     });
   }
 
+  // specification: https://github.com/uber/deck.gl/blob/master/src/layers/core/geojson-layer/geojson.js
   _loadData() {
     requestJson(FILE_PATH, (error, response) => {
       if (!error) {
-        // each entry in the data object contains all tweets posted at that second
-        const data = Array.from({length: SECONDS_PER_DAY}, () => []);
-        response.forEach(val => {
-          const second = parseInt(val.time, 10) % SECONDS_PER_DAY;
-          data[second].push(val);
+        let lineStrings = [];
+        let polygons = [];
+        response.features.forEach(val => {
+          switch (val.geometry.type) {
+          case 'LineString':
+            lineStrings.push(val.geometry.coordinates);
+            break;
+          case 'MultiLineString':
+            lineStrings = lineStrings.concat(val.geometry.coordinates);
+            break;
+          case 'Polygon':
+          case 'MultiPolygon':
+            polygons = polygons.concat(val.geometry.coordinates);
+            break;
+          default:
+            break;
+          }
         });
-        this.setState({data});
-      } else {
-        throw new Error(error.toString());
+        this.setState({lineStrings, polygons});
       }
     });
-  }
-
-  _animateData() {
-    const {data} = this.state;
-    const now = Date.now();
-    const getSecCeil = (ms) => Math.ceil(ms / 1000, 10) % SECONDS_PER_DAY;
-    const getSecFloor = (ms) => Math.floor(ms / 1000, 10) % SECONDS_PER_DAY;
-    const timeWindow = [
-      getSecCeil(now - TIME_WINDOW * 1000),
-      getSecFloor(now + TIME_WINDOW * 1000)
-    ];
-    if (data) {
-      let dataSlice = [];
-      for (let i = timeWindow[0]; i <= timeWindow[1]; i++) {
-        if (i >= 0 && i < data.length) {
-          const slice = data[i].map(val => {
-            const offset = Math.abs(getSecFloor(now) + (now % 1000) / 1000 - i) / TIME_WINDOW;
-            // use non-linear function to achieve smooth animation
-            const opac = Math.cos(offset * Math.PI / 2);
-            const color = [...TEXT_COLOR, opac * 255];
-            return Object.assign({}, val, {color}, {size: 12 * (opac + 1)});
-          });
-          dataSlice = [...dataSlice, ...slice];
-        }
-      }
-      this.setState({dataSlice});
-    }
-
-    this._animationFrame = window.requestAnimationFrame(this._animateData.bind(this));
   }
 
   _resize() {
@@ -134,7 +108,7 @@ class Root extends Component {
   }
 
   render() {
-    const {viewport, mapStyle, dataSlice} = this.state;
+    const {viewport, mapStyle, lineStrings, polygons} = this.state;
 
     return (
       <div>
@@ -146,7 +120,8 @@ class Root extends Component {
           mapboxApiAccessToken={MAPBOX_TOKEN}>
           <DeckGLOverlay
             viewport={viewport}
-            data={dataSlice}
+            lineStrings={lineStrings}
+            polygons={polygons}
           />
         </MapGL>
         <div ref="fps" className="fps" />
